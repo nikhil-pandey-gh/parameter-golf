@@ -558,7 +558,6 @@ jobs:
                 "container": "python:alpine",
                 "entrypoint": "uvx",
                 "entrypointArgs": [
-                  "uvx",
                   "--from",
                   "arxiv-mcp-server==0.3.2",
                   "arxiv-mcp-server",
@@ -1152,4 +1151,3 @@ jobs:
           name: safe-output-items
           path: /tmp/gh-aw/safe-output-items.jsonl
           if-no-files-found: ignore
-
