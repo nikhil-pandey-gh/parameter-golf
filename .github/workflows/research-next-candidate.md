@@ -72,7 +72,7 @@ Study the current baseline, all previous record submissions, and all previous ca
 4. Add a self-contained `train_gpt.py` for the candidate that can be run from the candidate directory.
 5. Only add extra files when they are genuinely needed for the candidate to run.
 6. Do not edit or delete existing record folders.
-7. Do not modify the root `train_gpt.py` at all. Leave every file outside the new candidate directory unchanged unless changing the candidate README or the PR/issue metadata produced by this workflow requires otherwise.
+7. Do not modify the root `train_gpt.py` at all. Leave every repository file outside the new candidate directory unchanged.
 8. Keep the implementation precise and minimal while still being complete.
 
 ## Validation
