@@ -22,7 +22,7 @@
 #
 # Research and implement the next parameter-golf candidate in a new timestamped candidates folder.
 #
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"ddd28c7fd029c860841fdc070e7de42ebdf12f60929aa1aa1dbaf87495861849","compiler_version":"v0.63.0","strict":true,"agent_id":"copilot","agent_model":"gpt-5.4"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"d8024c59f8996995e58d7f5a3566c0fdf6e5656d617aa34a18427cd72fa749fb","compiler_version":"v0.63.0","strict":true,"agent_id":"copilot","agent_model":"gpt-5.4"}
 
 name: "Research Next Candidate"
 "on":
@@ -276,6 +276,12 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
+      - name: Setup uv
+        uses: astral-sh/setup-uv@29b21a839666e60d6a2015b4010b35b7911d3590 # v7.6
       - name: Create gh-aw temp directory
         run: bash ${RUNNER_TEMP}/gh-aw/actions/create_gh_aw_tmp_dir.sh
       - name: Configure gh CLI for GitHub Enterprise
@@ -325,7 +331,7 @@ jobs:
             const determineAutomaticLockdown = require('${{ runner.temp }}/gh-aw/actions/determine_automatic_lockdown.cjs');
             await determineAutomaticLockdown(github, context, core);
       - name: Download container images
-        run: bash ${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh ghcr.io/github/gh-aw-firewall/agent:0.25.0 ghcr.io/github/gh-aw-firewall/api-proxy:0.25.0 ghcr.io/github/gh-aw-firewall/squid:0.25.0 ghcr.io/github/gh-aw-mcpg:v0.2.2 mcp/arxiv-mcp-server@sha256:6dc6bba6dfed97f4ad6eb8d23a5c98ef5b7fa6184937d54b2d675801cd9dd29e node:lts-alpine
+        run: bash ${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh ghcr.io/github/gh-aw-firewall/agent:0.25.0 ghcr.io/github/gh-aw-firewall/api-proxy:0.25.0 ghcr.io/github/gh-aw-firewall/squid:0.25.0 ghcr.io/github/gh-aw-mcpg:v0.2.2 node:lts-alpine python:alpine
       - name: Write Safe Outputs Config
         run: |
           mkdir -p ${RUNNER_TEMP}/gh-aw/safeoutputs
@@ -549,16 +555,15 @@ jobs:
             "mcpServers": {
               "arxiv": {
                 "type": "stdio",
-                "command": "docker",
-                "args": [
-                  "run",
-                  "-i",
-                  "--rm",
-                  "-e",
-                  "ARXIV_STORAGE_PATH=/tmp/gh-aw/arxiv-papers",
-                  "-v",
-                  "/tmp/gh-aw/arxiv-papers:/tmp/gh-aw/arxiv-papers:rw",
-                  "mcp/arxiv-mcp-server@sha256:6dc6bba6dfed97f4ad6eb8d23a5c98ef5b7fa6184937d54b2d675801cd9dd29e"
+                "container": "python:alpine",
+                "entrypoint": "uvx",
+                "entrypointArgs": [
+                  "uvx",
+                  "--from",
+                  "arxiv-mcp-server==0.3.2",
+                  "arxiv-mcp-server",
+                  "--storage-path",
+                  "/tmp/gh-aw/arxiv-papers"
                 ],
                 "tools": [
                   "search_papers",

@@ -24,16 +24,13 @@ tools:
   web-fetch:
 mcp-servers:
   arxiv:
-    command: docker
+    command: uvx
     args:
-      - run
-      - -i
-      - --rm
-      - -e
-      - ARXIV_STORAGE_PATH=/tmp/gh-aw/arxiv-papers
-      - -v
-      - /tmp/gh-aw/arxiv-papers:/tmp/gh-aw/arxiv-papers:rw
-      - mcp/arxiv-mcp-server@sha256:6dc6bba6dfed97f4ad6eb8d23a5c98ef5b7fa6184937d54b2d675801cd9dd29e
+      - --from
+      - arxiv-mcp-server==0.3.2
+      - arxiv-mcp-server
+      - --storage-path
+      - /tmp/gh-aw/arxiv-papers
     allowed:
       - search_papers
       - download_paper
