@@ -22,7 +22,7 @@
 #
 # Research and implement the next parameter-golf candidate in a new timestamped candidates folder.
 #
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"bd7f134e0d3f3e47b74b6263088c7c5c0aa09ad43bf5b19da775c7342978f0bc","compiler_version":"v0.63.0","strict":true,"agent_id":"copilot","agent_model":"gpt-5.4"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"ddd28c7fd029c860841fdc070e7de42ebdf12f60929aa1aa1dbaf87495861849","compiler_version":"v0.63.0","strict":true,"agent_id":"copilot","agent_model":"gpt-5.4"}
 
 name: "Research Next Candidate"
 "on":
@@ -325,7 +325,7 @@ jobs:
             const determineAutomaticLockdown = require('${{ runner.temp }}/gh-aw/actions/determine_automatic_lockdown.cjs');
             await determineAutomaticLockdown(github, context, core);
       - name: Download container images
-        run: bash ${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh ghcr.io/github/gh-aw-firewall/agent:0.25.0 ghcr.io/github/gh-aw-firewall/api-proxy:0.25.0 ghcr.io/github/gh-aw-firewall/squid:0.25.0 ghcr.io/github/gh-aw-mcpg:v0.2.2 node:lts-alpine
+        run: bash ${RUNNER_TEMP}/gh-aw/actions/download_docker_images.sh ghcr.io/github/gh-aw-firewall/agent:0.25.0 ghcr.io/github/gh-aw-firewall/api-proxy:0.25.0 ghcr.io/github/gh-aw-firewall/squid:0.25.0 ghcr.io/github/gh-aw-mcpg:v0.2.2 mcp/arxiv-mcp-server@sha256:6dc6bba6dfed97f4ad6eb8d23a5c98ef5b7fa6184937d54b2d675801cd9dd29e node:lts-alpine
       - name: Write Safe Outputs Config
         run: |
           mkdir -p ${RUNNER_TEMP}/gh-aw/safeoutputs
@@ -549,10 +549,16 @@ jobs:
             "mcpServers": {
               "arxiv": {
                 "type": "stdio",
-                "command": "bash",
+                "command": "docker",
                 "args": [
-                  "-lc",
-                  "if ! python -c 'import arxiv_mcp_server' >/dev/null 2>&1; then python -m pip install --disable-pip-version-check --quiet --user arxiv-mcp-server==0.3.2; fi; exec python -m arxiv_mcp_server"
+                  "run",
+                  "-i",
+                  "--rm",
+                  "-e",
+                  "ARXIV_STORAGE_PATH=/tmp/gh-aw/arxiv-papers",
+                  "-v",
+                  "/tmp/gh-aw/arxiv-papers:/tmp/gh-aw/arxiv-papers:rw",
+                  "mcp/arxiv-mcp-server@sha256:6dc6bba6dfed97f4ad6eb8d23a5c98ef5b7fa6184937d54b2d675801cd9dd29e"
                 ],
                 "tools": [
                   "search_papers",
@@ -560,9 +566,6 @@ jobs:
                   "list_papers",
                   "read_paper"
                 ],
-                "env": {
-                  "ARXIV_STORAGE_PATH": "/tmp/gh-aw/arxiv-papers"
-                },
                 "guard-policies": {
                   "write-sink": {
                     "accept": [

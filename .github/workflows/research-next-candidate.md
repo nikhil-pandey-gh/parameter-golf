@@ -24,12 +24,16 @@ tools:
   web-fetch:
 mcp-servers:
   arxiv:
-    command: bash
+    command: docker
     args:
-      - -lc
-      - "if ! python -c 'import arxiv_mcp_server' >/dev/null 2>&1; then python -m pip install --disable-pip-version-check --quiet --user arxiv-mcp-server==0.3.2; fi; exec python -m arxiv_mcp_server"
-    env:
-      ARXIV_STORAGE_PATH: /tmp/gh-aw/arxiv-papers
+      - run
+      - -i
+      - --rm
+      - -e
+      - ARXIV_STORAGE_PATH=/tmp/gh-aw/arxiv-papers
+      - -v
+      - /tmp/gh-aw/arxiv-papers:/tmp/gh-aw/arxiv-papers:rw
+      - mcp/arxiv-mcp-server@sha256:6dc6bba6dfed97f4ad6eb8d23a5c98ef5b7fa6184937d54b2d675801cd9dd29e
     allowed:
       - search_papers
       - download_paper
