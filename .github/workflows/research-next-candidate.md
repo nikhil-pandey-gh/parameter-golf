@@ -1,6 +1,12 @@
 ---
 name: Research Next Candidate
 description: Research and implement the next parameter-golf candidate in a new timestamped candidates folder.
+engine:
+  id: copilot
+  model: gpt-5.4
+  args:
+    - --reasoning-effort
+    - xhigh
 on:
   workflow_dispatch:
   schedule:
