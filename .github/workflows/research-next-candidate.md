@@ -9,7 +9,6 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
-engine: codex
 tools:
   github:
     mode: remote
