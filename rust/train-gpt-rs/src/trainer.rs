@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 
 use anyhow::{Result, anyhow, bail};
@@ -195,7 +195,7 @@ fn train_step(
     grad_accum_steps: usize,
 ) -> Result<f32> {
     let mut train_loss_sum = 0.0_f32;
-    let mut total_loss = None;
+    let mut total_loss: Option<Tensor> = None;
     for _ in 0..grad_accum_steps {
         let (x, y) = loader.next_batch(cfg.train_batch_tokens, cfg.train_seq_len, grad_accum_steps)?;
         let loss = model.forward_loss(&x, &y)?;
@@ -504,7 +504,7 @@ fn zeropower_via_newton_schulz(grad: &Tensor, steps: usize) -> Result<Tensor> {
         x = (x.affine(3.4445, 0.0)? + b.matmul(&x)?)?;
     }
     let x = if transposed { x.t()? } else { x };
-    x.to_dtype(DType::F32)
+    Ok(x.to_dtype(DType::F32)?)
 }
 
 #[cfg(test)]

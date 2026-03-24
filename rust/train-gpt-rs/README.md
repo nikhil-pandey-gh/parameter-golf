@@ -29,19 +29,22 @@ Key maturity gaps relative to `train_gpt.py`:
 
 ## Commands
 
-Smoke test on CPU:
+Library/unit validation:
 
 ```bash
 cd rust/train-gpt-rs
-cargo run -- smoke
+cargo test --lib
+cargo check
 ```
 
-Try a tiny training-style run against real shards if they exist locally:
+Tiny training-style run against real shards/tokenizer:
 
 ```bash
 cd rust/train-gpt-rs
 ITERATIONS=1 TRAIN_BATCH_TOKENS=8192 TRAIN_SEQ_LEN=128 cargo run -- train
 ```
+
+`train_gpt.py` has no synthetic-data or tokenizer fallbacks, and this crate now matches that behavior: both `train` and `smoke` require real shard files and a real SentencePiece model.
 
 ## Optional GPU-oriented features
 

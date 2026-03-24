@@ -99,8 +99,8 @@ pub fn quantize_varmap(varmap: &VarMap) -> Result<(QuantizedState, QuantStats)> 
         let (qt, scale, meta) = if shape.len() == 2 {
             quantize_per_row(shape.clone(), values)?
         } else {
-            quantize_per_tensor(shape.clone(), values)
-        }?;
+            quantize_per_tensor(shape.clone(), values)?
+        };
         stats.int8_bytes += qt.data.len();
         stats.int8_bytes += match &scale {
             QuantScale::Scalar { .. } => std::mem::size_of::<f32>(),
@@ -224,7 +224,7 @@ fn stored_bytes(stored: &StoredTensor) -> usize {
 
 fn roundtrip_values(values: &[f32], shape: Vec<usize>, dtype: DType) -> Result<Vec<f32>> {
     let tensor = Tensor::from_vec(values.to_vec(), shape, &Device::Cpu)?;
-    tensor.to_dtype(dtype)?.to_dtype(DType::F32)?.flatten_all()?.to_vec1::<f32>()
+    Ok(tensor.to_dtype(dtype)?.to_dtype(DType::F32)?.flatten_all()?.to_vec1::<f32>()?)
 }
 
 fn quantize_per_tensor(
