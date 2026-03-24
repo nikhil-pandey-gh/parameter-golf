@@ -1222,17 +1222,27 @@ def main() -> None:
             break
         elapsed_ms = training_time_ms + 1000.0 * (time.perf_counter() - t0)
         scale = lr_mul(step, elapsed_ms)
-        if args.late_qat_threshold > 0 and scale < args.late_qat_threshold and not CastedLinear._qat_enabled:
-            CastedLinear._qat_enabled = True
-            log0(f"late_qat:enabled step:{step} scale:{scale:.4f} -- recompiling for working QAT")
-            # FIX: torch.compile constant-folds Python class attributes at first trace,
-            # so the STE branch was dead-code-eliminated in all prior records. Calling
-            # torch._dynamo.reset() invalidates all cached compilations so the next
-            # forward retraces with _qat_enabled=True, making QAT actually active.
-            torch._dynamo.reset()
-            compiled_model = torch.compile(base_model, dynamic=False, fullgraph=True)
-            model = DDP(compiled_model, device_ids=[local_rank], broadcast_buffers=False) if distributed else compiled_model
-            log0(f"late_qat:recompile_done step:{step}")
+        if args.late_qat_threshold > 0 and not CastedLinear._qat_enabled:
+            should_enable = scale < args.late_qat_threshold
+            # Synchronize the QAT-enable decision across all ranks: per-rank wallclock
+            # timings can diverge under load, causing different ranks to trigger QAT at
+            # different steps. Rank 0 makes the decision; broadcast ensures all ranks
+            # recompile together, preventing DDP gradient-sync failures.
+            if distributed:
+                flag = torch.tensor(1 if should_enable else 0, device=device, dtype=torch.int32)
+                dist.broadcast(flag, src=0)
+                should_enable = bool(flag.item())
+            if should_enable:
+                CastedLinear._qat_enabled = True
+                log0(f"late_qat:enabled step:{step} scale:{scale:.4f} -- recompiling for working QAT")
+                # FIX: torch.compile constant-folds Python class attributes at first trace,
+                # so the STE branch was dead-code-eliminated in all prior records. Calling
+                # torch._dynamo.reset() invalidates all cached compilations so the next
+                # forward retraces with _qat_enabled=True, making QAT actually active.
+                torch._dynamo.reset()
+                compiled_model = torch.compile(base_model, dynamic=False, fullgraph=True)
+                model = DDP(compiled_model, device_ids=[local_rank], broadcast_buffers=False) if distributed else compiled_model
+                log0(f"late_qat:recompile_done step:{step}")
         zero_grad_all()
         train_loss = torch.zeros((), device=device)
         for micro_step in range(grad_accum_steps):
