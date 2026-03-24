@@ -4,6 +4,8 @@ use candle_nn::{Embedding, Init, Linear, Module, VarBuilder, VarMap};
 
 use crate::config::Hyperparameters;
 
+pub const RMS_NORM_EPS: f64 = 1.0e-5;
+
 #[derive(Clone)]
 pub struct LinearNoBias {
     inner: Linear,
@@ -89,8 +91,8 @@ impl CausalSelfAttention {
             .reshape((bsz, seqlen, self.num_kv_heads, self.head_dim))?
             .transpose(1, 2)?;
 
-        let q = rms_norm_no_weight(&q, 1e-6)?;
-        let k = rms_norm_no_weight(&k, 1e-6)?;
+        let q = rms_norm_no_weight(&q, RMS_NORM_EPS)?;
+        let k = rms_norm_no_weight(&k, RMS_NORM_EPS)?;
         let (cos, sin) = rotary_tables(seqlen, self.head_dim, self.rope_base, x.device())?;
         let q = apply_rotary_emb(&q, &cos, &sin)?;
         let k = apply_rotary_emb(&k, &cos, &sin)?;
@@ -163,14 +165,14 @@ impl Block {
         let x = mix0
             .broadcast_mul(x)?
             .broadcast_add(&mix1.broadcast_mul(x0)?)?;
-        let attn_out = self.attn.forward(&rms_norm_no_weight(&x, 1e-6)?)?;
+        let attn_out = self.attn.forward(&rms_norm_no_weight(&x, RMS_NORM_EPS)?)?;
         let x = x.broadcast_add(
             &self
                 .attn_scale
                 .reshape((1, 1, ()))?
                 .broadcast_mul(&attn_out)?,
         )?;
-        let mlp_out = self.mlp.forward(&rms_norm_no_weight(&x, 1e-6)?)?;
+        let mlp_out = self.mlp.forward(&rms_norm_no_weight(&x, RMS_NORM_EPS)?)?;
         Ok(x.broadcast_add(
             &self
                 .mlp_scale
@@ -247,7 +249,7 @@ impl Gpt {
 
     pub fn forward_loss(&self, input_ids: &Tensor, target_ids: &Tensor) -> Result<Tensor> {
         let mut x = self.tok_emb.forward(input_ids)?;
-        x = rms_norm_no_weight(&x, 1e-6)?;
+        x = rms_norm_no_weight(&x, RMS_NORM_EPS)?;
         let x0 = x.clone();
         let mut skips = Vec::with_capacity(self.num_encoder_layers);
 
@@ -266,7 +268,7 @@ impl Gpt {
             x = self.blocks[self.num_encoder_layers + index].forward(&x, &x0)?;
         }
 
-        let x = rms_norm_no_weight(&x, 1e-6)?.reshape(((), x.dim(D::Minus1)?))?;
+        let x = rms_norm_no_weight(&x, RMS_NORM_EPS)?.reshape(((), x.dim(D::Minus1)?))?;
         let targets = target_ids.flatten_all()?;
         let logits_proj = if self.tie_embeddings {
             x.matmul(&self.tok_emb.embeddings().t()?)?
