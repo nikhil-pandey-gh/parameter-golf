@@ -12,6 +12,7 @@ on:
   schedule: daily on weekdays
 permissions:
   contents: read
+  issues: read
   pull-requests: read
 tools:
   github:
