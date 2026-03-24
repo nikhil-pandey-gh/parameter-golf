@@ -22,7 +22,7 @@
 #
 # Research and implement the next parameter-golf candidate in a new timestamped candidates folder.
 #
-# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"4ce5e32dd6ac70e84f8aeedc6cbda022982e94b8b26ddd3fd92068dddd3ac8d0","compiler_version":"v0.63.0","strict":true,"agent_id":"copilot"}
+# gh-aw-metadata: {"schema_version":"v3","frontmatter_hash":"f9f331b4df2e35baad9d362bab8cbb5d73e67ee025f21917661e9835af868dad","compiler_version":"v0.63.0","strict":true,"agent_id":"copilot"}
 
 name: "Research Next Candidate"
 "on":

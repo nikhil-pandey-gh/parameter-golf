@@ -16,7 +16,6 @@ tools:
   bash: true
   edit:
   web-fetch:
-  web-search:
 network:
   allowed:
     - defaults
