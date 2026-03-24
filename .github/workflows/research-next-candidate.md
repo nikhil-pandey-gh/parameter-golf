@@ -9,7 +9,6 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
-engine: codex
 tools:
   github:
     mode: remote
@@ -17,7 +16,6 @@ tools:
   bash: true
   edit:
   web-fetch:
-  web-search:
 network:
   allowed:
     - defaults
