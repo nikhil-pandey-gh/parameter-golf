@@ -3,6 +3,8 @@ name: Research Next Candidate
 description: Research and implement the next parameter-golf candidate in a new timestamped candidates folder.
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
 permissions:
   contents: read
   issues: read
@@ -22,9 +24,13 @@ network:
     - python
 timeout-minutes: 60
 safe-outputs:
+  create-issue:
+    title-prefix: "[agentic candidate] "
+    max: 1
   create-pull-request:
     title-prefix: "[agentic candidate] "
     draft: true
+    auto-merge: true
     if-no-changes: error
 ---
 
@@ -66,21 +72,24 @@ Study the current baseline, all previous record submissions, and all previous ca
 4. Add a self-contained `train_gpt.py` for the candidate that can be run from the candidate directory.
 5. Only add extra files when they are genuinely needed for the candidate to run.
 6. Do not edit or delete existing record folders.
-7. Do not replace the root `train_gpt.py` unless absolutely necessary. Prefer copying and adapting code into the new candidate folder.
+7. Do not modify the root `train_gpt.py` at all. Leave every file outside the new candidate directory unchanged unless changing the candidate README or the PR/issue metadata produced by this workflow requires otherwise.
 8. Keep the implementation precise and minimal while still being complete.
 
 ## Validation
 
-- Run lightweight validation that already fits this repository, such as `python -m compileall candidates/YYYYMMDDHHMM_<short-slug>/train_gpt.py train_gpt.py`, plus any other existing low-cost checks that do not require new infrastructure.
+- Run lightweight validation that already fits this repository, such as `python -m compileall candidates/YYYYMMDDHHMM_<short-slug>/train_gpt.py`, plus any other existing low-cost checks that do not require new infrastructure.
 - If a safe smoke check is possible without extra infrastructure, run it.
 - Record the validation commands and outcomes in the new candidate `README.md`.
 
 ## Pull request output
 
-Create a draft pull request containing the new candidate files.
+First create an issue that summarizes the candidate hypothesis, motivation, and planned implementation.
+
+Then create a draft pull request containing the new candidate files and explicitly reference the created issue in the PR body using the issue number and link.
 
 In the pull request description, include:
 
+- the created issue number and link,
 - the chosen idea,
 - why it differs from the existing records and candidates,
 - the most relevant research that motivated it,
