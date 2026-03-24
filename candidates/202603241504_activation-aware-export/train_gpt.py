@@ -15,7 +15,10 @@ try:
     import zstandard
     _COMPRESSOR = "zstd"
 except ImportError:
+    zstandard = None
     _COMPRESSOR = "zlib"
+PTZ_MAGIC_ZSTD = b"PTZS"
+PTZ_MAGIC_ZLIB = b"PTZZ"
 import numpy as np
 import sentencepiece as spm
 import torch
@@ -424,6 +427,16 @@ class CastedLinear(nn.Linear):
         super().__init__(in_features, out_features, bias=bias, device=device, dtype=dtype)
         self.register_buffer("input_scale", torch.ones(in_features, dtype=torch.float32))
         self._input_scale_active = False
+        self.register_load_state_dict_post_hook(self._refresh_input_scale_after_load)
+    def _refresh_input_scale_after_load(self, module: nn.Module, incompatible_keys) -> None:
+        del incompatible_keys
+        if isinstance(module, CastedLinear):
+            module._input_scale_active = not torch.allclose(
+                module.input_scale.detach(),
+                torch.ones_like(module.input_scale),
+                rtol=0.0,
+                atol=1e-6,
+            )
     @torch.no_grad()
     def set_input_scale(self, scale: Tensor | None) -> None:
         if scale is None:
@@ -993,6 +1006,25 @@ def dequantize_mixed_int6(result: dict[str, Tensor], meta: dict[str, object],
         else:
             out[name] = (q.float() * float(s.item())).to(orig_dtype)
     return out
+def compress_quant_blob(data: bytes) -> bytes:
+    if _COMPRESSOR == "zstd":
+        if zstandard is None:
+            raise RuntimeError("zstd compression selected but zstandard is unavailable")
+        return PTZ_MAGIC_ZSTD + zstandard.ZstdCompressor(level=22).compress(data)
+    return PTZ_MAGIC_ZLIB + zlib.compress(data, 9)
+def decompress_quant_blob(blob: bytes) -> bytes:
+    if blob.startswith(PTZ_MAGIC_ZSTD):
+        if zstandard is None:
+            raise RuntimeError("final_model.int6.ptz uses zstd compression but zstandard is not installed")
+        return zstandard.ZstdDecompressor().decompress(blob[len(PTZ_MAGIC_ZSTD):])
+    if blob.startswith(PTZ_MAGIC_ZLIB):
+        return zlib.decompress(blob[len(PTZ_MAGIC_ZLIB):])
+    if zstandard is not None:
+        try:
+            return zstandard.ZstdDecompressor().decompress(blob)
+        except Exception:
+            pass
+    return zlib.decompress(blob)
 def iter_export_scaled_linears(model: nn.Module):
     for name, module in model.named_modules():
         if (
@@ -1487,7 +1519,7 @@ def main() -> None:
     quant_buf = io.BytesIO()
     torch.save({"w": quant_result, "m": quant_meta}, quant_buf)
     quant_raw = quant_buf.getvalue()
-    quant_blob = zstandard.ZstdCompressor(level=22).compress(quant_raw) if _COMPRESSOR == "zstd" else zlib.compress(quant_raw, 9)
+    quant_blob = compress_quant_blob(quant_raw)
     if master_process:
         with open("final_model.int6.ptz", "wb") as f:
             f.write(quant_blob)
@@ -1501,7 +1533,7 @@ def main() -> None:
     with open("final_model.int6.ptz", "rb") as f:
         quant_blob_disk = f.read()
     quant_state = torch.load(
-        io.BytesIO(zstandard.ZstdDecompressor().decompress(quant_blob_disk) if _COMPRESSOR == "zstd" else zlib.decompress(quant_blob_disk)),
+        io.BytesIO(decompress_quant_blob(quant_blob_disk)),
         map_location="cpu",
     )
     deq_state = dequantize_mixed_int6(quant_state["w"], quant_state["m"], sd_cpu)

@@ -63,6 +63,7 @@ The main code changes are:
 4. For each such linear, the exporter searches a small set of `alpha` values (`0.0, 0.35, 0.65` by default) and chooses the scale that minimizes an **activation-weighted int6 reconstruction proxy**.
 5. The chosen scale is folded into the weight columns before export, and the inverse scale is stored in `input_scale` so inference remains approximately function-preserving.
 6. In distributed runs, the activation stats are `all_reduce(MAX)`'d so every rank derives the same export transform.
+7. The AWQ activation flag is recomputed automatically after `load_state_dict()`, and the `.ptz` blob carries an explicit compression-format header so reload does not depend on the current runtime guessing `zstd` vs `zlib`.
 
 The actual quantizer is still the repo's familiar **GPTQ-lite style per-row int6 clip search**, so this is meant to **stack with** the current record rather than replace it.
 
