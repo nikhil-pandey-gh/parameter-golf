@@ -57,6 +57,11 @@ Study the current baseline, all previous record submissions, and all previous ca
 - Prefer ideas that can be implemented by adapting the repository's current code rather than introducing broad new infrastructure.
 - Avoid repeating an existing record or candidate unless you have a clear new twist and explain that twist explicitly.
 
+## Agent behavior requirements
+
+- Use subagents wisely when they can speed up multi-step repository review, research synthesis, or validation, but avoid unnecessary delegation for simple local edits.
+- Before opening the pull request, run a code review on the candidate code and address any relevant findings.
+
 ## Implementation requirements
 
 1. Choose the single best next candidate based on both repository evidence and external research.
@@ -79,6 +84,7 @@ Study the current baseline, all previous record submissions, and all previous ca
 
 - Run lightweight validation that already fits this repository, such as `python -m compileall candidates/YYYYMMDDHHMM_<short-slug>/train_gpt.py`, plus any other existing low-cost checks that do not require new infrastructure.
 - If a safe smoke check is possible without extra infrastructure, run it.
+- If feasible, run a minimal CPU-only smoke test of the candidate with the smallest safe settings you can use to confirm it starts correctly and does not immediately crash before any GPU run. If this is not feasible, explicitly say why.
 - Record the validation commands and outcomes in the new candidate `README.md`.
 
 ## Pull request output
@@ -95,4 +101,5 @@ In the pull request description, include:
 - the most relevant research that motivated it,
 - what files were added,
 - what validation you ran,
+- the code review findings you addressed or, if there were none, that code review completed cleanly,
 - the biggest uncertainties and suggested next experiments.
