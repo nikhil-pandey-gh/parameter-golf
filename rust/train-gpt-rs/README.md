@@ -1,6 +1,6 @@
 # train-gpt-rs
 
-Experimental Rust reproduction scaffold for `/home/runner/work/parameter-golf/parameter-golf/train_gpt.py`.
+Experimental Rust reproduction scaffold for the repository's root `train_gpt.py`.
 
 ## What this project does
 
@@ -32,14 +32,14 @@ Key maturity gaps relative to `train_gpt.py`:
 Smoke test on CPU:
 
 ```bash
-cd /home/runner/work/parameter-golf/parameter-golf/rust/train-gpt-rs
+cd rust/train-gpt-rs
 cargo run -- smoke
 ```
 
 Try a tiny training-style run against real shards if they exist locally:
 
 ```bash
-cd /home/runner/work/parameter-golf/parameter-golf/rust/train-gpt-rs
+cd rust/train-gpt-rs
 ITERATIONS=1 TRAIN_BATCH_TOKENS=8192 TRAIN_SEQ_LEN=128 cargo run -- train
 ```
 
