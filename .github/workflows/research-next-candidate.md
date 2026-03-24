@@ -34,7 +34,7 @@ When this workflow runs, act as a strong ML systems researcher and coding agent 
 
 ## Goal
 
-Study the current baseline, all previous record submissions, and all previous candidate iterations. Then do deep external research for the strongest next idea that fits this repository's constraints and implement it in a new directory named `candidates/YYYYMMDDHHMM_<short-slug>` using the current UTC timestamp to the minute.
+Study the current baseline, all previous record submissions, and all previous candidate iterations. Then do deep external research for the strongest next idea that fits this repository's constraints and implement it in a new directory named `candidates/YYYYMMDDHHMM_<short-slug>` using the current UTC timestamp to the minute, for example `candidates/202603240915_partial-rope-refresh`.
 
 ## Required repository review
 
@@ -46,7 +46,7 @@ Study the current baseline, all previous record submissions, and all previous ca
 ## External research requirements
 
 - Do deep research on the latest ideas that could help tiny language models under strict parameter and artifact limits.
-- Focus on ideas relevant to this challenge, including quantization, QAT variants, compression-aware training, parameter sharing, recurrent or depth-reuse designs, small-model attention alternatives, tokenizer or embedding efficiency, optimizer improvements, evaluation-aware techniques, and other compact-model tricks.
+- Focus on ideas relevant to this challenge, including quantization, Quantization-Aware Training (QAT) variants, compression-aware training, parameter sharing, recurrent or depth-reuse designs, small-model attention alternatives, tokenizer or embedding efficiency, optimizer improvements, evaluation-aware techniques, and other compact-model tricks.
 - Prefer ideas that can plausibly improve validation bits-per-byte under the repository's 16MB artifact budget and 10-minute training goal.
 - Prefer ideas that can be implemented by adapting the repository's current code rather than introducing broad new infrastructure.
 - Avoid repeating an existing record or candidate unless you have a clear new twist and explain that twist explicitly.
@@ -71,7 +71,7 @@ Study the current baseline, all previous record submissions, and all previous ca
 
 ## Validation
 
-- Run lightweight validation that already fits this repository, such as `python -m compileall` on any Python files you add or change.
+- Run lightweight validation that already fits this repository, such as `python -m compileall candidates/YYYYMMDDHHMM_<short-slug>/train_gpt.py train_gpt.py`, plus any other existing low-cost checks that do not require new infrastructure.
 - If a safe smoke check is possible without extra infrastructure, run it.
 - Record the validation commands and outcomes in the new candidate `README.md`.
 
