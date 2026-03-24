@@ -7,14 +7,12 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
-engine:
-  id: copilot
-  max-turns: 8
+engine: codex
 tools:
   github:
     mode: remote
     toolsets: [default]
-  bash:
+  bash: true
   edit:
   web-fetch:
   web-search:
