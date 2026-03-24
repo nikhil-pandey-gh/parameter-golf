@@ -22,10 +22,25 @@ tools:
   bash: true
   edit:
   web-fetch:
+mcp-servers:
+  arxiv:
+    command: bash
+    args:
+      - -lc
+      - "if ! python -c 'import arxiv_mcp_server' >/dev/null 2>&1; then python -m pip install --disable-pip-version-check --quiet --user arxiv-mcp-server==0.3.2; fi; exec python -m arxiv_mcp_server"
+    env:
+      ARXIV_STORAGE_PATH: /tmp/gh-aw/arxiv-papers
+    allowed:
+      - search_papers
+      - download_paper
+      - list_papers
+      - read_paper
 network:
   allowed:
     - defaults
     - python
+    - arxiv.org
+    - export.arxiv.org
 timeout-minutes: 60
 safe-outputs:
   create-issue:
@@ -56,6 +71,7 @@ Study the current baseline, all previous record submissions, and all previous ca
 ## External research requirements
 
 - Do deep research on the latest ideas that could help tiny language models under strict parameter and artifact limits.
+- Use the ArXiv MCP tools when helpful to search for candidate papers, download the most relevant ones, and ground the research summary in primary sources.
 - Focus on ideas relevant to this challenge, including quantization, Quantization-Aware Training (QAT) variants, compression-aware training, parameter sharing, recurrent or depth-reuse designs, small-model attention alternatives, tokenizer or embedding efficiency, optimizer improvements, evaluation-aware techniques, and other compact-model tricks.
 - Prefer ideas that can plausibly improve validation bits-per-byte under the repository's 16MB artifact budget and 10-minute training goal.
 - Prefer ideas that can be implemented by adapting the repository's current code rather than introducing broad new infrastructure.
