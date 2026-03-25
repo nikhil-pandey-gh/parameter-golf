@@ -27,7 +27,7 @@
     "--privileged",
     "--init"
   ],
-  "overrideCommand": false,
+  "overrideCommand": true,
   "forwardPorts": [
     8787
   ],
