@@ -1,0 +1,40 @@
+check this codespace why this is happening Configuring codespace...
+Running commands...
+$ devcontainer up --id-label Type=codespaces --workspace-folder /var/lib/docker/codespacemount/workspace/parameter-golf --expect-existing-container --skip-post-attach --mount type=bind,source=/.codespaces/agent/mount/cache,target=/vscode --container-data-folder .vscode-remote/data/Machine --container-system-data-folder /var/vscode-remote --log-level trace --log-format json --update-remote-user-uid-default never --mount-workspace-git-root false --config "/var/lib/docker/codespacemount/workspace/parameter-golf/.devcontainer/devcontainer.json" --override-config /root/.codespaces/shared/merged_devcontainer.json --default-user-env-probe loginInteractiveShell --container-session-data-folder /workspaces/.codespaces/.persistedshare/devcontainers-cli/cache --secrets-file /root/.codespaces/shared/user-secrets-envs.json
+[163 ms] @devcontainers/cli 0.83.3. Node.js v18.20.8. linux 6.8.0-1044-azure x64.
+Running the postCreateCommand from devcontainer.json...
+
+bash .devcontainer/post-create.sh
+Using Python 3.13.12 environment at: /usr/local/python/3.13.12
+Resolved 72 packages in 684ms
+  x Failed to download `torch==2.11.0`
+  |-> Failed to extract archive:
+  |   torch-2.11.0-cp313-cp313-manylinux_2_28_x86_64.whl
+  |-> I/O operation failed during extraction
+  `-> failed to create directory
+      `/home/vscode/.cache/uv/.tmpCIKdXj/torch/lib/libshm/`: No space left on
+      device (os error 28)
+[79912 ms] postCreateCommand from devcontainer.json failed with exit code 1. Skipping any further user-provided commands.
+
+Error: Command failed: /bin/sh -c bash .devcontainer/post-create.sh
+    at Q (/.codespaces/agent/bin/node_modules/@devcontainers/cli/dist/spec-node/devContainersSpecCLI.js:235:157)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Promise.allSettled (index 0)
+{"outcome":"error","message":"Command failed: /bin/sh -c bash .devcontainer/post-create.sh","description":"postCreateCommand from devcontainer.json failed.","containerId":"7d4ac0a2773a9cd68251287613171fc2710db534ae9ce215c21f6b6515de6f55"}
+    at async _q (/.codespaces/agent/bin/node_modules/@devcontainers/cli/dist/spec-node/devContainersSpecCLI.js:237:119)
+    at async qp (/.codespaces/agent/bin/node_modules/@devcontainers/cli/dist/spec-node/devContainersSpecCLI.js:226:4668)
+    at async Tp (/.codespaces/agent/bin/node_modules/@devcontainers/cli/dist/spec-node/devContainersSpecCLI.js:226:4013)
+    at async _p (/.codespaces/agent/bin/node_modules/@devcontainers/cli/dist/spec-node/devContainersSpecCLI.js:226:3217)
+    at async Tg (/.codespaces/agent/bin/node_modules/@devcontainers/cli/dist/spec-node/devContainersSpecCLI.js:226:2623)
+    at async x9 (/.codespaces/agent/bin/node_modules/@devcontainers/cli/dist/spec-node/devContainersSpecCLI.js:467:1550)
+    at async RL (/.codespaces/agent/bin/node_modules/@devcontainers/cli/dist/spec-node/devContainersSpecCLI.js:467:984)
+devcontainer process exited with exit code 1
+Finished configuring codespace.
+
+---
+
+try again
+
+---
+
+Do we need to fix the post-grade step so that this doesn't happen again?
