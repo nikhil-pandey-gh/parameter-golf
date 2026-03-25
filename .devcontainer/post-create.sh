@@ -11,6 +11,7 @@ export PATH="${HOME}/.local/bin:${PATH}"
 
 # Install global npm packages (tsgo = Go-based TypeScript 7 native compiler)
 npm install -g wrangler @typescript/native-preview
+npm install -g bun
 npm install -g @github/copilot@prerelease
 npm install -g @openai/codex@alpha
 
@@ -23,6 +24,7 @@ node --version
 npm --version
 python3 --version
 uv --version
+bun --version
 tsgo --version
 wrangler --version
 copilot --version
