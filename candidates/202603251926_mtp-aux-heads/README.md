@@ -88,13 +88,19 @@ Useful ablations:
 
 ## Validation
 
-I ran the lightweight validation that fits this environment:
+I ran the lightweight validation that fits this environment **from the repository root**:
 
 ```bash
 python -m compileall train_gpt.py train_gpt_mlx.py data candidates/202603251926_mtp-aux-heads/train_gpt.py
 ```
 
 Outcome: **passed**. The baseline scripts, `data/` utilities, and the candidate script all compiled successfully to bytecode.
+
+If you are already inside `candidates/202603251926_mtp-aux-heads/`, the equivalent local check is:
+
+```bash
+python -m compileall train_gpt.py
+```
 
 A minimal CPU runtime smoke test was **not feasible in this environment**. The current runner does not have runtime dependencies like `torch`, `numpy`, `sentencepiece`, or `flash_attn_interface` installed, and this script inherits the CUDA/FlashAttention runtime path from the record stack. Because of that, I limited validation here to syntax-level checks only.
 
