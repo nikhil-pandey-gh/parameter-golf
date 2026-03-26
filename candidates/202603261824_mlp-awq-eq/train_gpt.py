@@ -1662,9 +1662,24 @@ def run_smoke_test(args: Hyperparameters) -> None:
     with torch.inference_mode():
         roundtrip_loss = roundtrip_model(x, y)
         roundtrip_logits = roundtrip_model.forward_logits(x)
+    if not math.isfinite(loss.item()) or not math.isfinite(roundtrip_loss.item()):
+        raise RuntimeError("Smoke test produced non-finite loss values")
+    if not torch.isfinite(logits).all() or not torch.isfinite(roundtrip_logits).all():
+        raise RuntimeError("Smoke test produced non-finite logits")
+    loss_drift = abs(roundtrip_loss.item() - loss.item())
+    logit_rmse = torch.sqrt(torch.mean((roundtrip_logits - logits).float().square())).item()
+    logit_scale = torch.sqrt(torch.mean(logits.float().square())).item()
+    if loss_drift > max(0.5, 0.25 * abs(loss.item())):
+        raise RuntimeError(f"Smoke test loss drift too large: {loss_drift:.6f}")
+    if logit_rmse > max(1.0, 0.5 * logit_scale):
+        raise RuntimeError(
+            "Smoke test logit drift too large: "
+            f"rmse={logit_rmse:.6f} baseline_rms={logit_scale:.6f}"
+        )
     print(
         "smoke_test:ok "
         f"loss:{loss.item():.6f} roundtrip_loss:{roundtrip_loss.item():.6f} "
+        f"loss_drift:{loss_drift:.6f} logit_rmse:{logit_rmse:.6f} "
         f"logits_shape:{tuple(logits.shape)} roundtrip_logits_shape:{tuple(roundtrip_logits.shape)}"
     )
 

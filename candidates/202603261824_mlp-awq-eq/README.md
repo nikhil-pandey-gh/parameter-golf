@@ -63,7 +63,7 @@ Relative to `2026-03-23_LeakyReLU_LegalTTT_ParallelMuon`:
 5. Added a **FlashAttention fallback** plus `SMOKE_TEST=1` CPU mode that now runs:
    - a random-token forward pass, and
    - a tiny synthetic calibration -> equalize -> quantize -> dequantize roundtrip
-   so the smoke path covers the new PTQ/export logic rather than only the plain forward pass.
+   so the smoke path covers the new PTQ/export logic rather than only the plain forward pass, and fails if the roundtrip produces non-finite outputs or excessive loss/logit drift.
 
 ## How to run or evaluate it
 
