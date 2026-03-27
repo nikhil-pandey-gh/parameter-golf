@@ -881,7 +881,7 @@ class GPT(nn.Module):
             for i in range(max(0, num_layers - xsa_last_n), num_layers):
                 self.blocks[i].attn.use_xsa = True
         self._init_weights()
-    def set_mtp_head_weights(self, head_weights: Tensor) -> None:
+    def set_mtp_head_weights(self, head_weights: Tensor, active_heads: int) -> None:
         if head_weights.shape != self.mtp_head_weights.shape:
             raise ValueError(
                 f"Expected MTP head weights with shape {tuple(self.mtp_head_weights.shape)}, "
@@ -889,7 +889,7 @@ class GPT(nn.Module):
             )
         with torch.no_grad():
             self.mtp_head_weights.copy_(head_weights)
-        self.active_mtp_heads = sum(float(w) > 0.0 for w in head_weights.tolist())
+        self.active_mtp_heads = min(max(active_heads, 0), self.mtp_num_heads)
     def _init_weights(self) -> None:
         if self.tie_embeddings:
             nn.init.normal_(self.tok_emb.weight, mean=0.0, std=self.tied_embed_init_std)
@@ -1407,11 +1407,11 @@ def build_mtp_head_weights(
     ramp_frac: float,
     enabled: bool,
     device: torch.device,
-) -> Tensor:
+) -> tuple[Tensor, int]:
     if num_heads <= 0:
-        return torch.empty(0, device=device, dtype=torch.float32)
+        return torch.empty(0, device=device, dtype=torch.float32), 0
     if not enabled:
-        return torch.ones(num_heads, device=device, dtype=torch.float32)
+        return torch.ones(num_heads, device=device, dtype=torch.float32), num_heads
     start_frac = min(max(start_frac, 0.0), 1.0)
     ramp_frac = min(max(ramp_frac, 1e-6), 1.0)
     total_steps = max(total_steps, 1)
@@ -1419,8 +1419,9 @@ def build_mtp_head_weights(
     ramp_steps = max(int(ramp_frac * total_steps), 1)
     head_stage = (step - start_step) * num_heads / ramp_steps
     head_stage = min(max(head_stage, 0.0), float(num_heads))
+    active_heads = min(max(math.ceil(head_stage), 0), num_heads)
     positions = torch.arange(num_heads, device=device, dtype=torch.float32)
-    return (head_stage - positions).clamp_(0.0, 1.0)
+    return (head_stage - positions).clamp_(0.0, 1.0), active_heads
 
 
 # --- Training ---
@@ -1535,18 +1536,17 @@ def main() -> None:
             module.float()
     restore_low_dim_params_to_fp32(base_model)
     if base_model.mtp_head_weights.numel() > 0:
-        base_model.set_mtp_head_weights(
-            build_mtp_head_weights(
-                step=0,
-                num_heads=args.mtp_num_heads,
-                warmup_steps=args.warmup_steps,
-                total_steps=args.iterations,
-                start_frac=args.mtp_start_frac,
-                ramp_frac=args.mtp_ramp_frac,
-                enabled=args.mtp_curriculum,
-                device=device,
-            )
+        mtp_head_weights, mtp_active_heads = build_mtp_head_weights(
+            step=0,
+            num_heads=args.mtp_num_heads,
+            warmup_steps=args.warmup_steps,
+            total_steps=args.iterations,
+            start_frac=args.mtp_start_frac,
+            ramp_frac=args.mtp_ramp_frac,
+            enabled=args.mtp_curriculum,
+            device=device,
         )
+        base_model.set_mtp_head_weights(mtp_head_weights, mtp_active_heads)
     # No DDP -- Parallel Muon handles bank grad communication via reduce-scatter,
     # and non-bank grads are manually all-reduced before Adam steps.
     compiled_model = torch.compile(base_model, dynamic=False, fullgraph=True)
@@ -1742,18 +1742,17 @@ def main() -> None:
             CastedLinear._qat_enabled = True
             log0(f"late_qat:enabled step:{step} scale:{scale:.4f}")
         if base_model.mtp_head_weights.numel() > 0:
-            base_model.set_mtp_head_weights(
-                build_mtp_head_weights(
-                    step=step,
-                    num_heads=args.mtp_num_heads,
-                    warmup_steps=args.warmup_steps,
-                    total_steps=args.iterations,
-                    start_frac=args.mtp_start_frac,
-                    ramp_frac=args.mtp_ramp_frac,
-                    enabled=args.mtp_curriculum,
-                    device=device,
-                )
+            mtp_head_weights, mtp_active_heads = build_mtp_head_weights(
+                step=step,
+                num_heads=args.mtp_num_heads,
+                warmup_steps=args.warmup_steps,
+                total_steps=args.iterations,
+                start_frac=args.mtp_start_frac,
+                ramp_frac=args.mtp_ramp_frac,
+                enabled=args.mtp_curriculum,
+                device=device,
             )
+            base_model.set_mtp_head_weights(mtp_head_weights, mtp_active_heads)
         zero_grad_all()
         train_loss = torch.zeros((), device=device)
         for micro_step in range(grad_accum_steps):
