@@ -913,10 +913,10 @@ def collect_awq_input_sq_means(
 ) -> dict[str, Tensor]:
     if not args.awq_enabled or args.awq_calibration_batches <= 0:
         return {}
-    calib_batch_tokens = max(
-        args.awq_calibration_batch_tokens,
-        args.train_seq_len * world_size,
-    )
+    calib_granularity = args.train_seq_len * world_size
+    calib_batch_tokens = max(args.awq_calibration_batch_tokens, calib_granularity)
+    if calib_batch_tokens % calib_granularity != 0:
+        calib_batch_tokens = ((calib_batch_tokens + calib_granularity - 1) // calib_granularity) * calib_granularity
     loader = DistributedTokenLoader(args.train_files, rank, world_size, device)
     target_stats: dict[str, dict[str, Tensor]] = {}
     handles = []

@@ -100,6 +100,7 @@ Notes:
 - `DATA_PATH` and `TOKENIZER_PATH` default to the repository's top-level `data/` tree.
 - EMA remains enabled with the base script's fixed decay of `0.997`.
 - `LATE_QAT_THRESHOLD` defaults to `0.0` here; set it manually only if you want to revisit that path explicitly.
+- `AWQ_CALIBRATION_BATCH_TOKENS` is rounded up internally to a multiple of `WORLD_SIZE * TRAIN_SEQ_LEN` so it always matches the loader's reshape requirements.
 - `AWQ_CALIBRATION_BATCHES=0` disables the activation-aware calibration path and falls back to the original GPTQ-lite behavior.
 
 ## Validation
@@ -117,6 +118,7 @@ Outcome:
 
 - Passed.
 - The static AST check confirmed that the AWQ calibration helper now calls `DistributedTokenLoader(...)` with 4 positional arguments and `next_batch(...)` with 3 positional arguments, matching the base script's loader API.
+- A follow-up static check confirmed the AWQ calibration token budget is rounded up to a multiple of `WORLD_SIZE * TRAIN_SEQ_LEN`, covering the reshape edge case surfaced during code review.
 
 Attempted lightweight CPU smoke validation:
 
