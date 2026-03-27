@@ -1045,6 +1045,10 @@ def mixed_quantize_budgeted(state_dict: dict[str, Tensor], quant_budget_bytes: i
     base_plan = {"selected_promotions": [], "estimated_bytes": 0, "scheme_counts": {}}
     quant_blob = _compress_bytes(_serialize_quant_state(result, meta, base_plan))
     estimated_bytes = len(quant_blob)
+    if estimated_bytes > quant_budget_bytes:
+        raise RuntimeError(
+            f"Base mixed-precision artifact already exceeds budget: {estimated_bytes} > {quant_budget_bytes} bytes"
+        )
     for promo in promotions:
         if estimated_bytes + int(promo["delta_bytes"]) > quant_budget_bytes:
             continue
