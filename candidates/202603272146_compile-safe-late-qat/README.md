@@ -55,7 +55,7 @@ This candidate keeps the same 11-layer architecture and export path, but changes
    - It makes the intended late fake-quant branch actually execute during the tail phase
 
 3. **Added a local fallback for attention**
-   - If `flash_attn_interface` is not importable, the script falls back to PyTorch `scaled_dot_product_attention`
+   - If `flash_attn_interface` is not importable, the script falls back to PyTorch `scaled_dot_product_attention` and enables non-flash SDP backends for that path
    - This is mainly for portability and smoke testing; the intended target path remains FlashAttention 3 on CUDA
 
 4. **Fixed default data/tokenizer paths for candidate-local execution**

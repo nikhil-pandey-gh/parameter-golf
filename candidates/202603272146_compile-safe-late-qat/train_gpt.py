@@ -1007,10 +1007,11 @@ def main() -> None:
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     from torch.backends.cuda import enable_cudnn_sdp, enable_flash_sdp, enable_math_sdp, enable_mem_efficient_sdp
-    enable_cudnn_sdp(False)
+    fallback_sdp_enabled = flash_attn_3_func is None
+    enable_cudnn_sdp(fallback_sdp_enabled)
     enable_flash_sdp(True)
-    enable_mem_efficient_sdp(False)
-    enable_math_sdp(False)
+    enable_mem_efficient_sdp(fallback_sdp_enabled)
+    enable_math_sdp(fallback_sdp_enabled)
     logfile = None
     if master_process:
         os.makedirs("logs", exist_ok=True)
@@ -1156,7 +1157,11 @@ def main() -> None:
     xsa_layers = [i for i, b in enumerate(base_model.blocks) if b.attn.use_xsa]
     log0(f"XSA:last_{args.xsa_last_n} active_layers:{xsa_layers}")
     log0(f"world_size:{world_size} grad_accum_steps:{grad_accum_steps}")
-    log0("sdp_backends:cudnn=False flash=True mem_efficient=False math=False")
+    log0(
+        f"sdp_backends:cudnn={fallback_sdp_enabled} flash=True "
+        f"mem_efficient={fallback_sdp_enabled} math={fallback_sdp_enabled} "
+        f"flash_attn_interface={flash_attn_3_func is not None}"
+    )
     log0(f"attention_mode:gqa num_heads:{args.num_heads} num_kv_heads:{args.num_kv_heads}")
     log0(
         f"tie_embeddings:{args.tie_embeddings} embed_lr:{token_lr} "
@@ -1256,7 +1261,12 @@ def main() -> None:
             break
         elapsed_ms = training_time_ms + 1000.0 * (time.perf_counter() - t0)
         scale = lr_mul(step, elapsed_ms)
-        if args.late_qat_threshold > 0 and scale < args.late_qat_threshold and not CastedLinear._qat_enabled:
+        late_qat_trigger = args.late_qat_threshold > 0 and scale < args.late_qat_threshold and not CastedLinear._qat_enabled
+        if distributed and not CastedLinear._qat_enabled:
+            late_qat_trigger_tensor = torch.tensor(int(late_qat_trigger), device=device)
+            dist.all_reduce(late_qat_trigger_tensor, op=dist.ReduceOp.MAX)
+            late_qat_trigger = bool(late_qat_trigger_tensor.item())
+        if late_qat_trigger:
             CastedLinear._qat_enabled = True
             if args.late_qat_eager and training_compiled:
                 if distributed:
