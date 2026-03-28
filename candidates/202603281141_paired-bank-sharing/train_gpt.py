@@ -106,7 +106,7 @@ class Hyperparameters:
     ttt_lr = float(os.environ.get("TTT_LR", 0.002))
     ttt_epochs = int(os.environ.get("TTT_EPOCHS", 3))
     ttt_chunk_tokens = int(os.environ.get("TTT_CHUNK_TOKENS", 32768))
-    ttt_freeze_blocks = int(os.environ.get("TTT_FREEZE_BLOCKS", 2))
+    ttt_freeze_blocks = int(os.environ.get("TTT_FREEZE_BLOCKS", 0))
     ttt_momentum = float(os.environ.get("TTT_MOMENTUM", 0.9))
     ttt_batch_seqs = int(os.environ.get("TTT_BATCH_SEQS", 32))
     ttt_grad_clip = float(os.environ.get("TTT_GRAD_CLIP", 1.0))
@@ -1140,6 +1140,12 @@ def eval_val_sliding_ttt(
          f"total_windows={len(window_starts)} stride={stride} "
          f"ttt_lr={args.ttt_lr} ttt_epochs={args.ttt_epochs} "
          f"freeze_blocks={args.ttt_freeze_blocks}")
+
+    if args.ttt_freeze_blocks > 0:
+        raise ValueError(
+            "TTT_FREEZE_BLOCKS>0 is unsupported in this banked model because the effective "
+            "attention/MLP weights live in the top-level banks rather than under blocks.{i}."
+        )
 
     loss_sum = torch.zeros((), device=device, dtype=torch.float64)
     token_count = torch.zeros((), device=device, dtype=torch.float64)

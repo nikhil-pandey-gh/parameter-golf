@@ -76,6 +76,8 @@ SEED=1337 \
 torchrun --standalone --nproc_per_node=8 train_gpt.py
 ```
 
+For this banked variant, keep `TTT_FREEZE_BLOCKS=0`. The script now rejects nonzero TTT block freezing entirely, because the effective attention/MLP weights live in the top-level banks rather than under `blocks.{i}` parameters.
+
 A dependency-equipped smoke command is:
 
 ```bash
