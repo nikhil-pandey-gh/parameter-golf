@@ -1555,6 +1555,11 @@ def main() -> None:
     base_model.kv_bank.data = base_model.kv_bank.data.float()
     base_model.mlp_up_bank.data = base_model.mlp_up_bank.data.float()
     base_model.mlp_down_bank.data = base_model.mlp_down_bank.data.float()
+    base_model.bank_qat_alpha = base_model.bank_qat_alpha.float()
+    base_model.qo_bank_qat_scales = base_model.qo_bank_qat_scales.to(dtype=torch.float16)
+    base_model.kv_bank_qat_scales = base_model.kv_bank_qat_scales.to(dtype=torch.float16)
+    base_model.mlp_up_bank_qat_scales = base_model.mlp_up_bank_qat_scales.to(dtype=torch.float16)
+    base_model.mlp_down_bank_qat_scales = base_model.mlp_down_bank_qat_scales.to(dtype=torch.float16)
     for module in base_model.modules():
         if isinstance(module, CastedLinear):
             module.float()
