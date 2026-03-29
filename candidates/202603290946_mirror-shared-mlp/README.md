@@ -60,7 +60,7 @@ Relative to `2026-03-22_11L_EMA_GPTQ-lite_warmdown3500_QAT015_1.1233/train_gpt.p
 
 1. **Mirrored MLP sharing**
    - added `SHARE_MLP_MIRROR=1` by default
-   - encoder/decoder layers share MLP weights according to the existing U-Net mirror pattern
+   - skip-paired encoder/decoder layers share MLP weights according to the existing U-Net pairing, while the final unpaired decoder block keeps its own MLP
    - attention stacks, norms, residual controls, and skip weights remain layer-specific
 
 2. **Alias-aware export path**
@@ -76,7 +76,7 @@ Relative to `2026-03-22_11L_EMA_GPTQ-lite_warmdown3500_QAT015_1.1233/train_gpt.p
    - `VE_DIM`: `128 -> 192`
 
 5. **Optional FlashAttention fallback**
-   - if `flash_attn_interface` is unavailable, attention falls back to PyTorch SDPA instead of failing at import time
+   - if `flash_attn_interface` is unavailable, attention falls back to `torch.nn.functional.scaled_dot_product_attention`, allowing PyTorch to use its best available SDPA backend
    - training still expects the repository's usual CUDA environment
 
 ## How to run or evaluate it

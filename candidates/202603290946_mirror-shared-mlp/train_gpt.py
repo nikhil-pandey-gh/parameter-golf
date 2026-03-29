@@ -496,6 +496,24 @@ def flash_attention_or_sdpa(q: Tensor, k: Tensor, v: Tensor) -> Tensor:
     return y.permute(0, 2, 1, 3).contiguous()
 
 
+def build_unet_mlp_share_pattern(num_layers: int, enabled: bool) -> list[int]:
+    if not enabled:
+        return list(range(num_layers))
+    num_encoder_layers = num_layers // 2
+    num_decoder_layers = num_layers - num_encoder_layers
+    num_skip_weights = min(num_encoder_layers, num_decoder_layers)
+    pattern = list(range(num_layers))
+    next_group = num_encoder_layers
+    for i in range(num_decoder_layers):
+        layer_idx = num_encoder_layers + i
+        if i < num_skip_weights:
+            pattern[layer_idx] = num_encoder_layers - 1 - i
+        else:
+            pattern[layer_idx] = next_group
+            next_group += 1
+    return pattern
+
+
 class CausalSelfAttention(nn.Module):
     def __init__(
         self,
@@ -696,7 +714,7 @@ class GPT(nn.Module):
         self.num_skip_weights = min(self.num_encoder_layers, self.num_decoder_layers)
         self.skip_weights = nn.Parameter(torch.ones(self.num_skip_weights, model_dim, dtype=torch.float32))
         self.share_mlp_mirror = share_mlp_mirror
-        self.mlp_share_pattern = [min(i, num_layers - 1 - i) if share_mlp_mirror else i for i in range(num_layers)]
+        self.mlp_share_pattern = build_unet_mlp_share_pattern(num_layers, share_mlp_mirror)
         shared_mlps: dict[int, MLP] = {}
         blocks: list[Block] = []
         for i in range(num_layers):
@@ -1056,11 +1074,10 @@ def main() -> None:
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     from torch.backends.cuda import enable_cudnn_sdp, enable_flash_sdp, enable_math_sdp, enable_mem_efficient_sdp
-    use_flash_sdp = flash_attn_3_func is not None
     enable_cudnn_sdp(False)
-    enable_flash_sdp(use_flash_sdp)
-    enable_mem_efficient_sdp(False)
-    enable_math_sdp(not use_flash_sdp)
+    enable_flash_sdp(True)
+    enable_mem_efficient_sdp(True)
+    enable_math_sdp(True)
     logfile = None
     if master_process:
         os.makedirs("logs", exist_ok=True)
@@ -1213,7 +1230,7 @@ def main() -> None:
     )
     log0(f"attention_backend:{'flash_attn' if flash_attn_3_func is not None else 'sdpa_fallback'}")
     log0(f"world_size:{world_size} grad_accum_steps:{grad_accum_steps}")
-    log0(f"sdp_backends:cudnn=False flash:{use_flash_sdp} mem_efficient=False math:{not use_flash_sdp}")
+    log0("sdp_backends:cudnn=False flash=True mem_efficient=True math=True")
     log0(f"attention_mode:gqa num_heads:{args.num_heads} num_kv_heads:{args.num_kv_heads}")
     log0(
         f"tie_embeddings:{args.tie_embeddings} embed_lr:{token_lr} "
