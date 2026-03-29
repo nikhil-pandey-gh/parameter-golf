@@ -26,10 +26,11 @@ from torch import Tensor, nn
 from torch.nn.parallel import DistributedDataParallel as DDP
 from flash_attn_interface import flash_attn_func as flash_attn_3_func
 class Hyperparameters:
-    data_path = os.environ.get("DATA_PATH", "./data/datasets/fineweb10B_sp1024")
+    repo_root = Path(__file__).resolve().parents[2]
+    data_path = os.environ.get("DATA_PATH", str(repo_root / "data/datasets/fineweb10B_sp1024"))
     train_files = os.path.join(data_path, "fineweb_train_*.bin")
     val_files = os.path.join(data_path, "fineweb_val_*.bin")
-    tokenizer_path = os.environ.get("TOKENIZER_PATH", "./data/tokenizers/fineweb_1024_bpe.model")
+    tokenizer_path = os.environ.get("TOKENIZER_PATH", str(repo_root / "data/tokenizers/fineweb_1024_bpe.model"))
     run_id = os.environ.get("RUN_ID", "202603290517_mtp_auxheads")
     seed = int(os.environ.get("SEED", 1337))
     val_batch_size = int(os.environ.get("VAL_BATCH_SIZE", 524_288))

@@ -85,13 +85,11 @@ From the candidate directory:
 cd candidates/202603290517_mtp-auxheads
 
 RUN_ID=202603290517_mtp_auxheads \
-DATA_PATH=../../data/datasets/fineweb10B_sp1024 \
-TOKENIZER_PATH=../../data/tokenizers/fineweb_1024_bpe.model \
 SEED=1337 \
 torchrun --standalone --nproc_per_node=8 train_gpt.py
 ```
 
-Key candidate defaults already live in the script, but you can override them explicitly if desired:
+The candidate script now resolves its default dataset/tokenizer paths relative to the repository root, so it is runnable from inside the candidate directory without extra path overrides. You can still override any of the important knobs explicitly if desired:
 
 ```bash
 MTP_NUM_HEADS=2 \
