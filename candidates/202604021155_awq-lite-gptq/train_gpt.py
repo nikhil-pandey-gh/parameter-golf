@@ -1961,10 +1961,16 @@ def main() -> None:
             for name, t in base_model.state_dict().items():
                 ema_state[name].mul_(ema_decay).add_(t.detach().float(), alpha=1.0 - ema_decay)
         step += 1
-        if awq_input_buffer is not None and args.awq_buffer_every > 0 and scale < args.awq_collect_threshold and step % args.awq_buffer_every == 0:
-            awq_input_buffer.append(
-                x[: min(args.awq_max_batch_seqs, x.size(0))].detach().to(device="cpu", dtype=torch.int16).clone()
-            )
+        if awq_input_buffer is not None and args.awq_buffer_every > 0 and step % args.awq_buffer_every == 0:
+            awq_collect_scale = scale
+            if distributed:
+                awq_scale_tensor = torch.tensor(scale, device=device, dtype=torch.float32)
+                dist.all_reduce(awq_scale_tensor, op=dist.ReduceOp.MIN)
+                awq_collect_scale = float(awq_scale_tensor.item())
+            if awq_collect_scale < args.awq_collect_threshold:
+                awq_input_buffer.append(
+                    x[: min(args.awq_max_batch_seqs, x.size(0))].detach().to(device="cpu", dtype=torch.int16).clone()
+                )
         approx_training_time_ms = training_time_ms + 1000.0 * (time.perf_counter() - t0)
         if args.swa_enabled and scale < 0.2 and step % args.swa_every == 0:
             if swa_state is None:
