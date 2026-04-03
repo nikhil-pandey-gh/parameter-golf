@@ -1387,9 +1387,12 @@ def main() -> None:
             break
         elapsed_ms = training_time_ms + 1000.0 * (time.perf_counter() - t0)
         scale = lr_mul(step, elapsed_ms)
-        if args.late_qat_threshold > 0 and scale < args.late_qat_threshold and not CastedLinear._qat_enabled:
-            if distributed:
-                dist.barrier()
+        should_enable_qat = args.late_qat_threshold > 0 and scale < args.late_qat_threshold and not CastedLinear._qat_enabled
+        if distributed and args.late_qat_threshold > 0 and not CastedLinear._qat_enabled:
+            should_enable_tensor = torch.tensor(int(should_enable_qat), device=device)
+            dist.all_reduce(should_enable_tensor, op=dist.ReduceOp.MAX)
+            should_enable_qat = bool(should_enable_tensor.item())
+        if should_enable_qat and not CastedLinear._qat_enabled:
             CastedLinear._qat_enabled = True
             t_recompile = time.perf_counter()
             compiled_model, model = build_training_model()

@@ -46,6 +46,7 @@ Changes:
    - fake-quant is applied only to modules that are exported through the learned int6 path, not to train-only heads
 2. **Compile-safe late-QAT**
    - when LR scale crosses `LATE_QAT_THRESHOLD`, the script enables QAT and recompiles the training model once so `torch.compile` cannot keep an old no-QAT graph alive
+   - on multi-GPU runs, the enable decision is synchronized across ranks before recompilation
 3. **Export uses learned clip ratios**
    - int6 export reuses each weight matrix's learned clip ratio when available
    - if no learned ratio exists, the old GPTQ-lite percentile-search path remains as a fallback
