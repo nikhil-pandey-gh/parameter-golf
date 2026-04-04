@@ -1105,11 +1105,11 @@ def eval_val_sliding_ttt(
     args: Hyperparameters, base_model: nn.Module, rank: int, world_size: int,
     device: torch.device, val_tokens: Tensor, base_bytes_lut: Tensor,
     has_leading_space_lut: Tensor, is_boundary_token_lut: Tensor,
-    stride: int, batch_seqs: int = 32, log0=print,
+    stride: int, batch_seqs: int = 32, eval_seq_len: int | None = None, log0=print,
 ) -> tuple[float, float]:
     """Legal score-first TTT (PR #461 recipe): score each chunk with sliding windows,
     then train on it. Every token scored BEFORE any update that could use it."""
-    seq_len = args.train_seq_len
+    seq_len = eval_seq_len or args.train_seq_len
     total_tokens = val_tokens.numel() - 1
     ttt_chunk = args.ttt_chunk_tokens
 
@@ -1397,11 +1397,17 @@ def run_smoke_test(args: Hyperparameters) -> None:
     unbanked_sd = _unbank_state_dict(export_sd)
     quant_result, quant_meta = mixed_quantize_int6(unbanked_sd, {"mlp", "attn"})
     quant_buf = io.BytesIO()
-    torch.save({"w": quant_result, "m": quant_meta}, quant_buf)
+    export_arch = {
+        "num_layers": args.num_layers,
+        "bank_share_mode": args.bank_share_mode,
+        "layer_to_bank": model.layer_to_bank,
+    }
+    torch.save({"w": quant_result, "m": quant_meta, "arch": export_arch}, quant_buf)
     quant_blob = lzma.compress(quant_buf.getvalue(), preset=6)
     quant_state = torch.load(io.BytesIO(lzma.decompress(quant_blob)), map_location="cpu")
     deq_unbanked = dequantize_mixed_int6(quant_state["w"], quant_state["m"], unbanked_sd)
     deq_state = _rebank_state_dict(deq_unbanked, export_sd)
+    reloaded_arch = quant_state.get("arch", {})
     reloaded = GPT(
         vocab_size=args.vocab_size,
         num_layers=args.num_layers,
@@ -1427,14 +1433,25 @@ def run_smoke_test(args: Hyperparameters) -> None:
         ve_layers=args.ve_layers,
         gated_attention=args.gated_attention,
         value_residual=args.value_residual,
-        bank_share_mode=args.bank_share_mode,
+        bank_share_mode=reloaded_arch.get("bank_share_mode", args.bank_share_mode),
     )
+    if reloaded_arch.get("num_layers", args.num_layers) != args.num_layers:
+        raise ValueError(
+            f"SMOKE_TEST num_layers mismatch: saved {reloaded_arch.get('num_layers')} vs current {args.num_layers}"
+        )
+    if "layer_to_bank" in reloaded_arch and reloaded.layer_to_bank != list(reloaded_arch["layer_to_bank"]):
+        raise ValueError(
+            f"SMOKE_TEST layer_to_bank mismatch: saved {reloaded_arch['layer_to_bank']} vs current {reloaded.layer_to_bank}"
+        )
     reloaded.load_state_dict(deq_state, strict=True)
     reloaded.eval()
     with torch.no_grad():
         rt_loss = reloaded(input_ids, target_ids)
+    smoke_delta = abs(loss.item() - rt_loss.item())
+    if smoke_delta > 0.05:
+        raise RuntimeError(f"SMOKE_TEST roundtrip drift too large: {smoke_delta:.4f}")
     print(
-        f"smoke_test:ok loss={loss.item():.4f} rt_loss={rt_loss.item():.4f} "
+        f"smoke_test:ok loss={loss.item():.4f} rt_loss={rt_loss.item():.4f} delta={smoke_delta:.4f} "
         f"shared_banks={model.num_shared_banks} bank_share_mode={model.bank_share_mode} "
         f"artifact_bytes={len(quant_blob)}"
     )
@@ -1772,6 +1789,7 @@ def main() -> None:
                 base_bytes_lut,
                 has_leading_space_lut,
                 is_boundary_token_lut,
+                eval_seq_len=effective_eval_seq_len,
             )
             log0(
                 f"step:{step}/{args.iterations} val_loss:{val_loss:.4f} val_bpb:{val_bpb:.4f} "
@@ -1883,6 +1901,7 @@ def main() -> None:
     diag_val_loss, diag_val_bpb = eval_val(
         args, compiled_model, rank, world_size, device, grad_accum_steps,
         val_tokens, base_bytes_lut, has_leading_space_lut, is_boundary_token_lut,
+        eval_seq_len=effective_eval_seq_len,
     )
     torch.cuda.synchronize()
     log0(
@@ -1905,7 +1924,12 @@ def main() -> None:
     unbanked_sd = _unbank_state_dict(sd_cpu)
     quant_result, quant_meta = mixed_quantize_int6(unbanked_sd, {"mlp", "attn"})
     quant_buf = io.BytesIO()
-    torch.save({"w": quant_result, "m": quant_meta}, quant_buf)
+    export_arch = {
+        "num_layers": args.num_layers,
+        "bank_share_mode": args.bank_share_mode,
+        "layer_to_bank": base_model.layer_to_bank,
+    }
+    torch.save({"w": quant_result, "m": quant_meta, "arch": export_arch}, quant_buf)
     quant_raw = quant_buf.getvalue()
     quant_blob = lzma.compress(quant_raw, preset=6)
     if master_process:
@@ -1926,6 +1950,12 @@ def main() -> None:
     deq_unbanked = dequantize_mixed_int6(quant_state["w"], quant_state["m"], unbanked_sd)
     # Re-bank the dequantized tensors
     deq_state = _rebank_state_dict(deq_unbanked, sd_cpu)
+    reloaded_arch = quant_state.get("arch", {})
+    eval_bank_share_mode = reloaded_arch.get("bank_share_mode", args.bank_share_mode)
+    if reloaded_arch.get("num_layers", args.num_layers) != args.num_layers:
+        raise ValueError(
+            f"Artifact num_layers={reloaded_arch.get('num_layers')} does not match current NUM_LAYERS={args.num_layers}"
+        )
     eval_model = GPT(
         vocab_size=args.vocab_size, num_layers=args.num_layers, model_dim=args.model_dim,
         num_heads=args.num_heads, num_kv_heads=args.num_kv_heads, mlp_mult=args.mlp_mult,
@@ -1937,8 +1967,13 @@ def main() -> None:
         rope_dims=args.rope_dims, ln_scale=args.ln_scale, dtg=args.dtg_enabled,
         ve_enabled=args.ve_enabled, ve_dim=args.ve_dim, ve_layers=args.ve_layers,
         gated_attention=args.gated_attention, value_residual=args.value_residual,
-        bank_share_mode=args.bank_share_mode,
+        bank_share_mode=eval_bank_share_mode,
     ).to(device).bfloat16()
+    if "layer_to_bank" in reloaded_arch and eval_model.layer_to_bank != list(reloaded_arch["layer_to_bank"]):
+        raise ValueError(
+            f"Artifact layer_to_bank mismatch: saved {reloaded_arch['layer_to_bank']} "
+            f"vs current {eval_model.layer_to_bank}"
+        )
     eval_model.qo_bank.data = eval_model.qo_bank.data.float()
     eval_model.kv_bank.data = eval_model.kv_bank.data.float()
     eval_model.mlp_up_bank.data = eval_model.mlp_up_bank.data.float()
@@ -2002,7 +2037,7 @@ def main() -> None:
         ttt_loss, ttt_bpb = eval_val_sliding_ttt(
             args, eval_model, rank, world_size, device,
             val_tokens, base_bytes_lut, has_leading_space_lut, is_boundary_token_lut,
-            stride=args.eval_stride, log0=log0,
+            stride=args.eval_stride, eval_seq_len=sw_seq_len, log0=log0,
         )
         torch.cuda.synchronize()
         log0(f"legal_ttt val_loss:{ttt_loss:.4f} val_bpb:{ttt_bpb:.4f} "

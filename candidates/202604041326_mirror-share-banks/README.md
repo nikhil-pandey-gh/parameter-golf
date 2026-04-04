@@ -51,10 +51,10 @@ Changes in this candidate:
 1. Added `BANK_SHARE_MODE` with `mirror` and `none`.
 2. Replaced per-layer physical bank allocation with shared-bank allocation derived from `BANK_SHARE_MODE`.
 3. Routed each logical layer through `layer_to_bank` instead of indexing a unique bank slice.
-4. Updated bank export/import helpers so quantization operates on **shared bank slices**, not duplicated logical-layer copies.
+4. Updated bank export/import helpers so quantization operates on **shared bank slices**, not duplicated logical-layer copies, and serialized the sharing metadata into the artifact so reload does not depend on out-of-band `BANK_SHARE_MODE`.
 5. Increased the default `BIGRAM_VOCAB_SIZE` from `2048` to `3072` to spend part of the recovered artifact budget.
 6. Added a FlashAttention fallback to PyTorch SDPA so the script can be smoke-tested without `flash_attn_interface`.
-7. Added `SMOKE_TEST=1`, which runs a tiny CPU-only forward pass plus export/roundtrip reload check.
+7. Added `SMOKE_TEST=1`, which runs a tiny CPU-only forward pass plus export/roundtrip reload check and asserts the roundtrip loss drift stays bounded.
 
 ## How to run
 
@@ -83,7 +83,7 @@ The local environment did not have the repo Python dependencies installed in its
 | Command | Outcome |
 |---|---|
 | `python -m compileall candidates/202604041326_mirror-share-banks/train_gpt.py` | Success |
-| `SMOKE_TEST=1 NUM_LAYERS=4 MODEL_DIM=128 NUM_HEADS=4 NUM_KV_HEADS=2 MLP_MULT=2 BIGRAM_VOCAB_SIZE=128 XSA_LAST_N=1 ROPE_DIMS=16 VE_ENABLED=0 TRAIN_SEQ_LEN=32 EVAL_SEQ_LEN=32 python candidates/202604041326_mirror-share-banks/train_gpt.py` | Success in temp venv; printed `smoke_test:ok loss=6.9315 rt_loss=6.9320 shared_banks=2 bank_share_mode=mirror artifact_bytes=266828` |
+| `SMOKE_TEST=1 NUM_LAYERS=4 MODEL_DIM=128 NUM_HEADS=4 NUM_KV_HEADS=2 MLP_MULT=2 BIGRAM_VOCAB_SIZE=128 XSA_LAST_N=1 ROPE_DIMS=16 VE_ENABLED=0 TRAIN_SEQ_LEN=32 EVAL_SEQ_LEN=32 python candidates/202604041326_mirror-share-banks/train_gpt.py` | Success in temp venv; printed `smoke_test:ok loss=6.9315 rt_loss=6.9320 delta=0.0005 shared_banks=2 bank_share_mode=mirror artifact_bytes=266880` |
 
 ## Main risks / tradeoffs
 
