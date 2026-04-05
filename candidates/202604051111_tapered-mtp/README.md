@@ -28,7 +28,8 @@ This candidate turns on a **training-only multi-token prediction (MTP) auxiliary
 - **Orthogonal but not the base for this candidate:** `records/track_10min_16mb/2026-03-23_LeakyReLU_LegalTTT_ParallelMuon/`
   - strongest post-TTT result, but much of that gain is eval-side and more operationally complex than needed for a candidate experiment
 
-There were **no prior runs under `candidates/`** when this candidate was created.
+There were **no prior runs under `candidates/` in the checked-out branch** when this candidate was created.
+Separately, an open repo PR already explores train-only MTP on the heavier 2026-03-23 banked/TTT stack; this candidate is intentionally different because it isolates MTP on the cleaner 2026-03-22 pre-TTT base and adds **main-head initialization + warmdown tapering** rather than only enabling the dormant auxiliary heads.
 
 ## External research that informed this candidate
 
