@@ -95,9 +95,9 @@ SMOKE_TEST=1 python train_gpt.py
 ## Validation run in this workflow
 
 - `python -m compileall candidates/202604071626_awq-lite-channel-scale/train_gpt.py` -> passed
-- `SMOKE_TEST=1 python candidates/202604071626_awq-lite-channel-scale/train_gpt.py` -> passed, printing `smoke_test_ok loss:4.8460 mean_abs_diff:0.0000 logits_shape:(2, 32, 128)`
+- `SMOKE_TEST=1 python candidates/202604071626_awq-lite-channel-scale/train_gpt.py` -> passed, printing `smoke_test_ok loss:4.8460 awq_fp_max_diff:0.000000 mean_abs_diff:0.0205 logits_shape:(2, 32, 128)`
 
-The smoke path intentionally checks the new export logic as well as the forward pass.
+The smoke path intentionally checks the new export logic, verifies that AWQ preserves the original fp forward pass, and forces a real quantized roundtrip instead of the small-tensor passthrough path.
 
 ## Main expected risks / tradeoffs
 

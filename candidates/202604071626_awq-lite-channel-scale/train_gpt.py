@@ -938,7 +938,7 @@ def quantize_int6_per_row(t: Tensor, clip_range: int = 31) -> tuple[Tensor, Tens
     scale = torch.tensor(amax / clip_range if amax > 0 else 1.0, dtype=torch.float16)
     q = torch.clamp(torch.round(t32 / scale.float()), -clip_range, clip_range).to(torch.int8)
     return q, scale
-def mixed_quantize_int6(state_dict: dict[str, Tensor], int6_cats: set[str]):
+def mixed_quantize_int6(state_dict: dict[str, Tensor], int6_cats: set[str], keep_float_max_numel: int = 65_536):
     num_layers_total = max(
         (int(k.split(".")[1]) for k in state_dict if k.startswith("blocks.")),
         default=0,
@@ -949,7 +949,7 @@ def mixed_quantize_int6(state_dict: dict[str, Tensor], int6_cats: set[str]):
     for name, tensor in state_dict.items():
         t = tensor.detach().cpu().contiguous()
         cat = _classify_param(name)
-        if not t.is_floating_point() or t.numel() <= 65536:
+        if not t.is_floating_point() or t.numel() <= keep_float_max_numel:
             result[name] = t.to(torch.float16) if t.is_floating_point() else t
             meta[name] = "passthrough"
             continue
@@ -1156,7 +1156,7 @@ def run_smoke_test() -> None:
     restore_low_dim_params_to_fp32(fp_export_model)
     fp_export_model.load_state_dict(export_sd, strict=True)
     fp_export_model.eval()
-    quant_result, quant_meta = mixed_quantize_int6(export_sd, {"mlp", "attn"})
+    quant_result, quant_meta = mixed_quantize_int6(export_sd, {"mlp", "attn"}, keep_float_max_numel=0)
     deq_state = dequantize_mixed_int6(quant_result, quant_meta, export_sd)
     eval_model = build_model()
     for module in eval_model.modules():
@@ -1170,12 +1170,15 @@ def run_smoke_test() -> None:
         logits = eval_model.forward_logits(x)
     if not torch.isfinite(base_logits).all() or not torch.isfinite(fp_export_logits).all() or not torch.isfinite(logits).all():
         raise RuntimeError("Smoke test produced non-finite logits")
+    awq_fp_diff = (base_logits - fp_export_logits).abs().max().item()
     mean_abs_diff = (fp_export_logits - logits).abs().mean().item()
+    if awq_fp_diff > 1e-2:
+        raise RuntimeError(f"Smoke test AWQ FP drift too large: {awq_fp_diff:.6f}")
     if mean_abs_diff > 1.0:
         raise RuntimeError(f"Smoke test roundtrip drift too large: {mean_abs_diff:.4f}")
     print(
         f"smoke_test_ok loss:{loss.item():.4f} "
-        f"mean_abs_diff:{mean_abs_diff:.4f} logits_shape:{tuple(logits.shape)}"
+        f"awq_fp_max_diff:{awq_fp_diff:.6f} mean_abs_diff:{mean_abs_diff:.4f} logits_shape:{tuple(logits.shape)}"
     )
 
 def main() -> None:
@@ -1554,13 +1557,13 @@ def main() -> None:
             log_fn=log0,
         )
         log0(f"awq_applied_modules:{awq_applied}")
+    sd_cpu = {k: v.detach().cpu() for k, v in export_sd.items()}
     if master_process:
-        torch.save(export_sd, "final_model.pt")
+        torch.save(sd_cpu, "final_model.pt")
         model_bytes = os.path.getsize("final_model.pt")
         code_bytes = len(code.encode("utf-8"))
         log0(f"Serialized model: {model_bytes} bytes")
         log0(f"Code size: {code_bytes} bytes")
-    sd_cpu = {k: v.detach().cpu() for k, v in export_sd.items()}
     quant_result, quant_meta = mixed_quantize_int6(sd_cpu, {"mlp", "attn"})
     quant_buf = io.BytesIO()
     torch.save({"w": quant_result, "m": quant_meta}, quant_buf)
