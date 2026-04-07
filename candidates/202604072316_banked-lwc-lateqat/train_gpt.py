@@ -1007,6 +1007,12 @@ class GPT(nn.Module):
         if self.training and self.learned_clip_qat_active:
             return fake_quantize_with_logclip(self.tok_emb.weight, self.tok_emb_clip_log, 127)
         return self.tok_emb.weight
+    def _lm_head_weight(self) -> Tensor:
+        if self.lm_head is None:
+            raise RuntimeError("lm_head is required when tie_embeddings=False")
+        if self.training and self.learned_clip_qat_active and self.lm_head_clip_log is not None:
+            return fake_quantize_with_logclip(self.lm_head.weight, self.lm_head_clip_log, 127)
+        return self.lm_head.weight
     def _get_ve(self, layer_idx: int, input_ids: Tensor, ve_cache: dict | None = None) -> Tensor | None:
         """Get value embedding for a specific layer using shared table + per-layer scale."""
         if self.ve_shared is None or layer_idx not in self.ve_layer_indices:
@@ -1059,9 +1065,7 @@ class GPT(nn.Module):
         if self.tie_embeddings:
             logits_proj = F.linear(x_flat, tok_weight)
         else:
-            if self.lm_head is None:
-                raise RuntimeError("lm_head is required when tie_embeddings=False")
-            logits_proj = self.lm_head(x_flat)
+            logits_proj = F.linear(x_flat, self._lm_head_weight())
         logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
         main_loss = F.cross_entropy(logits.float(), targets, reduction="mean")
         if self.training and self.mtp_num_heads > 0 and self.mtp_loss_weight > 0.0:
@@ -1123,7 +1127,7 @@ class GPT(nn.Module):
         if self.tie_embeddings:
             logits_proj = F.linear(x, tok_weight)
         else:
-            logits_proj = self.lm_head(x)
+            logits_proj = F.linear(x, self._lm_head_weight())
         return self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
 
 # --- Sliding window evaluation ---
