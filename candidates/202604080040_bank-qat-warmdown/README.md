@@ -25,6 +25,8 @@ The goal is to make the final EMA checkpoint live closer to the eventual int6 ex
 
 There were **no prior `candidates/` directories** in the repo at the time this candidate was created.
 
+There was, however, a **prior unmerged GitHub candidate iteration** in the same general space (`#948` / draft PR `#949`, `202604072316_banked-lwc-lateqat`). This candidate intentionally takes a different route: **no learned clipping tensors, no late recompilation, and no export-time reuse of trained clip parameters**. The twist here is a cheaper, zero-extra-export-parameter projection-only warmdown that aims to preserve more of the 03-23 stack's step budget.
+
 ## External research that informed it
 
 - **LSQ: Learned Step Size Quantization** — https://arxiv.org/abs/1902.08153
