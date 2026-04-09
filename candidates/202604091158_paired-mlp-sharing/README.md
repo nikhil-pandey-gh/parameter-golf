@@ -40,9 +40,9 @@ The strongest non-TTT stack in this repo already squeezes a lot out of quantizat
    - Ports the static activation gain from the 2026-03-23 record.
 3. **Bigger default BigramHash table**
    - Default `BIGRAM_VOCAB_SIZE` is `3072` instead of `2048`.
-4. **Alias-aware int6 export with architecture checks**
+4. **Alias-aware int6 export with portable artifact metadata**
    - Shared tensors are detected during mixed int6 export and serialized once.
-   - The quantized artifact now also stores the sharing/layout metadata needed to fail fast if someone tries to reload it with a non-matching MLP-sharing topology.
+   - The quantized artifact now stores the codec it used plus normalized sharing/layout metadata, so reload is portable across zlib/zstd environments and fails fast on a non-matching MLP-sharing topology.
 5. **Local robustness tweak**
    - `flash_attn_interface` is now optional; local CPU smoke runs fall back to `torch.nn.functional.scaled_dot_product_attention`.
 
@@ -78,7 +78,7 @@ The script keeps the same evaluation flow as the base record and prints final ro
 |---|---|
 | `python -m compileall candidates/202604091158_paired-mlp-sharing/train_gpt.py train_gpt.py train_gpt_mlx.py data` | Succeeded. |
 | `python3 -m venv /tmp/gh-aw/agent/pgolf-venv && . /tmp/gh-aw/agent/pgolf-venv/bin/activate && python -m pip install --quiet numpy sentencepiece torch` | Succeeded in a temporary venv used only for smoke validation. |
-| CPU smoke: import the candidate module from file, instantiate a tiny `GPT`, run forward/backward, then run `mixed_quantize_int6` + `dequantize_mixed_int6` | Succeeded with output `{'loss': 3.483412742614746, 'alias_count': 4, 'shared_groups': ((0, 1), (2, 3)), 'mismatch_guard': 'ok'}`. |
+| CPU smoke: import the candidate module from file, instantiate a tiny `GPT`, run forward/backward, then run `mixed_quantize_int6` + `dequantize_mixed_int6`, codec wrap/unwrap, and canonical metadata validation | Succeeded with output `{'loss': 3.4642491340637207, 'alias_count': 4, 'codec': 'zlib', 'shared_groups': ((0, 1), (2, 3)), 'mismatch_guard': 'ok'}`. |
 
 What I did **not** validate here:
 

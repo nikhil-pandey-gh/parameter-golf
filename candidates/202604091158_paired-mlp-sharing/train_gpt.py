@@ -15,6 +15,7 @@ try:
     import zstandard
     _COMPRESSOR = "zstd"
 except ImportError:
+    zstandard = None
     _COMPRESSOR = "zlib"
 import numpy as np
 import sentencepiece as spm
@@ -1057,6 +1058,24 @@ def build_gpt_kwargs(
         "shared_mlp_until": args.shared_mlp_until,
     }
 def build_arch_meta(args: Hyperparameters) -> dict[str, object]:
+    head_dim = args.model_dim // args.num_heads
+    effective_rope_dims = args.rope_dims if 0 < args.rope_dims < head_dim else 0
+    effective_xsa_last_n = min(max(args.xsa_last_n, 0), args.num_layers)
+    effective_shared_mlp_until = max(0, min(args.shared_mlp_until, args.num_layers))
+    effective_shared_groups = tuple(
+        tuple(
+            range(
+                group_idx * args.shared_mlp_group_size,
+                min((group_idx + 1) * args.shared_mlp_group_size, effective_shared_mlp_until),
+            )
+        )
+        for group_idx in range((effective_shared_mlp_until + args.shared_mlp_group_size - 1) // args.shared_mlp_group_size)
+    )
+    effective_ve_layers = tuple(
+        layer_idx
+        for layer_idx in (int(x) for x in args.ve_layers.split(",") if x.strip())
+        if 0 <= layer_idx < args.num_layers
+    ) if args.ve_enabled else ()
     return {
         "vocab_size": args.vocab_size,
         "num_layers": args.num_layers,
@@ -1065,22 +1084,19 @@ def build_arch_meta(args: Hyperparameters) -> dict[str, object]:
         "num_kv_heads": args.num_kv_heads,
         "mlp_mult": args.mlp_mult,
         "tie_embeddings": args.tie_embeddings,
-        "tied_embed_init_std": args.tied_embed_init_std,
         "logit_softcap": args.logit_softcap,
         "rope_base": args.rope_base,
-        "qk_gain_init": args.qk_gain_init,
-        "bigram_vocab_size": args.bigram_vocab_size,
-        "bigram_dim": args.bigram_dim,
-        "xsa_last_n": args.xsa_last_n,
-        "rope_dims": args.rope_dims,
+        "bigram_vocab_size": args.bigram_vocab_size if args.bigram_vocab_size > 0 else 0,
+        "bigram_dim": args.bigram_dim if args.bigram_vocab_size > 0 else 0,
+        "xsa_last_n": effective_xsa_last_n,
+        "rope_dims": effective_rope_dims,
         "ln_scale": args.ln_scale,
         "dtg_enabled": args.dtg_enabled,
         "ve_enabled": args.ve_enabled,
-        "ve_dim": args.ve_dim,
-        "ve_layers": args.ve_layers,
+        "ve_dim": args.ve_dim if args.ve_enabled else 0,
+        "ve_layers": effective_ve_layers,
         "mlp_negative_slope": args.mlp_negative_slope,
-        "shared_mlp_group_size": args.shared_mlp_group_size,
-        "shared_mlp_until": args.shared_mlp_until,
+        "shared_mlp_groups": effective_shared_groups,
     }
 def validate_arch_meta(saved_arch: object, expected_arch: dict[str, object]) -> None:
     if not isinstance(saved_arch, dict):
@@ -1092,6 +1108,30 @@ def validate_arch_meta(saved_arch: object, expected_arch: dict[str, object]) -> 
     ]
     if mismatches:
         raise ValueError("Quantized artifact architecture mismatch: " + "; ".join(mismatches))
+ARTIFACT_HEADER = b"PGA1"
+ARTIFACT_CODEC_BYTES = 4
+def compress_artifact(payload: bytes) -> tuple[bytes, str]:
+    codec = _COMPRESSOR
+    if codec == "zstd":
+        if zstandard is None:
+            raise RuntimeError("zstandard is required to write zstd-compressed artifacts")
+        compressed = zstandard.ZstdCompressor(level=22).compress(payload)
+    else:
+        compressed = zlib.compress(payload, 9)
+    return ARTIFACT_HEADER + codec.encode("ascii") + compressed, codec
+def decompress_artifact(blob: bytes) -> tuple[bytes, str]:
+    if not blob.startswith(ARTIFACT_HEADER) or len(blob) < len(ARTIFACT_HEADER) + ARTIFACT_CODEC_BYTES:
+        raise ValueError("Unexpected artifact header")
+    codec_start = len(ARTIFACT_HEADER)
+    codec = blob[codec_start : codec_start + ARTIFACT_CODEC_BYTES].decode("ascii")
+    payload = blob[codec_start + ARTIFACT_CODEC_BYTES :]
+    if codec == "zstd":
+        if zstandard is None:
+            raise RuntimeError("Artifact uses zstd compression but zstandard is not installed")
+        return zstandard.ZstdDecompressor().decompress(payload), codec
+    if codec == "zlib":
+        return zlib.decompress(payload), codec
+    raise ValueError(f"Unsupported artifact codec: {codec}")
 def main() -> None:
     global zeropower_via_newtonschulz5
     code = Path(__file__).read_text(encoding="utf-8")
@@ -1439,23 +1479,25 @@ def main() -> None:
     quant_buf = io.BytesIO()
     torch.save({"w": quant_result, "m": quant_meta, "arch": build_arch_meta(args)}, quant_buf)
     quant_raw = quant_buf.getvalue()
-    quant_blob = zstandard.ZstdCompressor(level=22).compress(quant_raw) if _COMPRESSOR == "zstd" else zlib.compress(quant_raw, 9)
+    quant_blob, artifact_codec = compress_artifact(quant_raw)
     if master_process:
         with open("final_model.int6.ptz", "wb") as f:
             f.write(quant_blob)
         quant_file_bytes = len(quant_blob)
         code_bytes = len(code.encode("utf-8"))
-        log0(f"Serialized model int6+{_COMPRESSOR}: {quant_file_bytes} bytes")
-        log0(f"Total submission size int6+{_COMPRESSOR}: {quant_file_bytes + code_bytes} bytes")
-        log0(f"Total submission size int8+zlib: {quant_file_bytes + code_bytes} bytes")
+        log0(f"Serialized model int6+{artifact_codec}: {quant_file_bytes} bytes")
+        log0(f"Total submission size int6+{artifact_codec}: {quant_file_bytes + code_bytes} bytes")
+        log0(f"Total submission size final_artifact: {quant_file_bytes + code_bytes} bytes")
     if distributed:
         dist.barrier()
     with open("final_model.int6.ptz", "rb") as f:
         quant_blob_disk = f.read()
+    quant_payload, loaded_codec = decompress_artifact(quant_blob_disk)
     quant_state = torch.load(
-        io.BytesIO(zstandard.ZstdDecompressor().decompress(quant_blob_disk) if _COMPRESSOR == "zstd" else zlib.decompress(quant_blob_disk)),
+        io.BytesIO(quant_payload),
         map_location="cpu",
     )
+    log0(f"artifact_codec:{loaded_codec}")
     validate_arch_meta(quant_state.get("arch"), build_arch_meta(args))
     deq_state = dequantize_mixed_int6(quant_state["w"], quant_state["m"], template_sd)
     eval_model = GPT(**build_gpt_kwargs(args, mtp_num_heads=0, mtp_loss_weight=0.0)).to(device).bfloat16()
