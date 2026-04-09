@@ -1443,7 +1443,17 @@ def main() -> None:
             break
         elapsed_ms = training_time_ms + 1000.0 * (time.perf_counter() - t0)
         scale = lr_mul(step, elapsed_ms)
-        if args.lsq_qat_enabled and args.lsq_qat_threshold > 0 and scale < args.lsq_qat_threshold and lsq_qat_start_step is None:
+        should_start_lsq_qat = (
+            args.lsq_qat_enabled
+            and args.lsq_qat_threshold > 0
+            and scale < args.lsq_qat_threshold
+            and lsq_qat_start_step is None
+        )
+        if distributed and lsq_qat_start_step is None:
+            should_start_tensor = torch.tensor(int(should_start_lsq_qat), device=device)
+            dist.all_reduce(should_start_tensor, op=dist.ReduceOp.MAX)
+            should_start_lsq_qat = bool(should_start_tensor.item())
+        if should_start_lsq_qat:
             lsq_qat_start_step = step
             lsq_qat_modules = reset_lsq_qat(base_model, args.lsq_qat_init_percentile, activate=True)
             set_lsq_qat_blend(base_model, 0.0)
