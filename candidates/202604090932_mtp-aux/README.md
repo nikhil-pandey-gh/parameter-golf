@@ -42,8 +42,10 @@ Relative to `2026-03-22_11L_EMA_GPTQ-lite_warmdown3500_QAT015_1.1233/train_gpt.p
    - Added `MTP_LOSS_DECAY=0.7` so the +1 token target has the strongest weight and farther horizons are treated as softer auxiliary supervision.
 3. **Embedding-seeded MTP heads**
    - Added `MTP_COPY_LM_INIT=1`, which initializes each auxiliary MTP head from the token embedding matrix instead of leaving the auxiliary heads at zero.
-4. **Self-describing exported checkpoints**
-   - `final_model.pt` and `final_model.int6.ptz` now carry the stripped artifact `model_kwargs`, so reload paths can reconstruct the export-time no-MTP model shape explicitly.
+4. **Self-describing export metadata**
+   - The raw `final_model.pt` stays in the repo's established plain-state-dict format.
+   - The stripped no-MTP artifact config is written alongside it as `final_model.config.json`.
+   - The quantized `final_model.int6.ptz` payload carries the same stripped `model_kwargs` plus an explicit codec header, so reload does not depend on local package availability guesses.
 
 Everything else stays on the proven 11-layer GPTQ-lite/EMA stack so this remains a precise candidate instead of a broad rewrite.
 

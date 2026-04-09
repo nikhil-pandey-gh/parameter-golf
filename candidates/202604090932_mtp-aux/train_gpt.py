@@ -2,6 +2,7 @@ from __future__ import annotations
 import copy
 import glob
 import io
+import json
 import math
 import os
 import random
@@ -15,6 +16,7 @@ try:
     import zstandard
     _COMPRESSOR = "zstd"
 except ImportError:
+    zstandard = None
     _COMPRESSOR = "zlib"
 import numpy as np
 import sentencepiece as spm
@@ -997,6 +999,28 @@ def gpt_kwargs_from_args(args: Hyperparameters, export_artifact: bool = False) -
         kwargs["mtp_num_heads"] = 0
         kwargs["mtp_loss_weight"] = 0.0
     return kwargs
+_ARTIFACT_CODEC_MAGIC = b"PG_CODEC:"
+def encode_quant_blob(payload: bytes) -> bytes:
+    if _COMPRESSOR == "zstd":
+        if zstandard is None:
+            raise RuntimeError("zstd compression requested but zstandard is not installed")
+        compressed = zstandard.ZstdCompressor(level=22).compress(payload)
+    else:
+        compressed = zlib.compress(payload, 9)
+    return _ARTIFACT_CODEC_MAGIC + _COMPRESSOR.encode("ascii") + b"\n" + compressed
+def decode_quant_blob(blob: bytes) -> bytes:
+    codec = _COMPRESSOR
+    payload = blob
+    if blob.startswith(_ARTIFACT_CODEC_MAGIC):
+        header, payload = blob.split(b"\n", 1)
+        codec = header[len(_ARTIFACT_CODEC_MAGIC):].decode("ascii")
+    if codec == "zstd":
+        if zstandard is None:
+            raise RuntimeError("Artifact was compressed with zstd, but zstandard is not installed")
+        return zstandard.ZstdDecompressor().decompress(payload)
+    if codec == "zlib":
+        return zlib.decompress(payload)
+    raise ValueError(f"Unknown artifact codec: {codec}")
 def main() -> None:
     global zeropower_via_newtonschulz5
     code = Path(__file__).read_text(encoding="utf-8")
@@ -1333,7 +1357,9 @@ def main() -> None:
     if excluded_mtp > 0:
         log0(f"export_excluding_mtp_params:{excluded_mtp}")
     if master_process:
-        torch.save({"state_dict": export_sd, "model_kwargs": export_model_kwargs}, "final_model.pt")
+        torch.save(export_sd, "final_model.pt")
+        with open("final_model.config.json", "w", encoding="utf-8") as f:
+            json.dump(export_model_kwargs, f, indent=2, sort_keys=True)
         model_bytes = os.path.getsize("final_model.pt")
         code_bytes = len(code.encode("utf-8"))
         log0(f"Serialized model: {model_bytes} bytes")
@@ -1343,7 +1369,7 @@ def main() -> None:
     quant_buf = io.BytesIO()
     torch.save({"w": quant_result, "m": quant_meta, "model_kwargs": export_model_kwargs}, quant_buf)
     quant_raw = quant_buf.getvalue()
-    quant_blob = zstandard.ZstdCompressor(level=22).compress(quant_raw) if _COMPRESSOR == "zstd" else zlib.compress(quant_raw, 9)
+    quant_blob = encode_quant_blob(quant_raw)
     if master_process:
         with open("final_model.int6.ptz", "wb") as f:
             f.write(quant_blob)
@@ -1357,7 +1383,7 @@ def main() -> None:
     with open("final_model.int6.ptz", "rb") as f:
         quant_blob_disk = f.read()
     quant_state = torch.load(
-        io.BytesIO(zstandard.ZstdDecompressor().decompress(quant_blob_disk) if _COMPRESSOR == "zstd" else zlib.decompress(quant_blob_disk)),
+        io.BytesIO(decode_quant_blob(quant_blob_disk)),
         map_location="cpu",
     )
     deq_state = dequantize_mixed_int6(quant_state["w"], quant_state["m"], sd_cpu)
